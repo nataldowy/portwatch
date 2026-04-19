@@ -1,72 +1,75 @@
-package config_test
+package config
 
 import (
-	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
-
-	"portwatch/internal/config"
 )
 
 func writeTempConfig(t *testing.T, content string) string {
 	t.Helper()
-	f, err := os.CreateTemp("", "portwatch-cfg-*.json")
-	if err != nil {
-		t.Fatalf("create temp file: %v", err)
+	dir := t.TempDir()
+	p := filepath.Join(dir, "portwatch.toml")
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatalf("writeTempConfig: %v", err)
 	}
-	f.WriteString(content)
-	f.Close()
-	t.Cleanup(func() { os.Remove(f.Name()) })
-	return f.Name()
+	return p
 }
 
 func TestDefaultConfig(t *testing.T) {
-	cfg := config.Default()
-	if len(cfg.PortRanges) == 0 {
-		t.Fatal("expected default port ranges")
+	cfg := Default()
+	if cfg.Interval != 30*time.Second {
+		t.Errorf("interval: got %v, want 30s", cfg.Interval)
 	}
-	if cfg.Interval.Duration <= 0 {
-		t.Fatal("expected positive default interval")
+	if cfg.PortRange.From != 1 || cfg.PortRange.To != 65535 {
+		t.Errorf("port range: got %d-%d", cfg.PortRange.From, cfg.PortRange.To)
+	}
+	if cfg.AlertCooldown != 5*time.Minute {
+		t.Errorf("alert_cooldown: got %v, want 5m", cfg.AlertCooldown)
 	}
 }
 
 func TestLoadConfig(t *testing.T) {
-	path := writeTempConfig(t, `{"port_ranges":[[80,90],[443,443]],"interval":"1m","log_file":"/tmp/pw.log"}`)
-	cfg, err := config.Load(path)
+	p := writeTempConfig(t, `
+interval = "10s"
+alert_cooldown = "2m"
+[port_range]
+  from = 1024
+  to   = 9999
+`)
+	cfg, err := Load(p)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if len(cfg.PortRanges) != 2 {
-		t.Errorf("expected 2 ranges, got %d", len(cfg.PortRanges))
+	if cfg.Interval != 10*time.Second {
+		t.Errorf("interval: got %v", cfg.Interval)
 	}
-	if cfg.Interval.Duration != time.Minute {
-		t.Errorf("expected 1m, got %v", cfg.Interval.Duration)
+	if cfg.PortRange.From != 1024 || cfg.PortRange.To != 9999 {
+		t.Errorf("port range: got %d-%d", cfg.PortRange.From, cfg.PortRange.To)
 	}
-	if cfg.LogFile != "/tmp/pw.log" {
-		t.Errorf("unexpected log_file: %s", cfg.LogFile)
+	if cfg.AlertCooldown != 2*time.Minute {
+		t.Errorf("alert_cooldown: got %v", cfg.AlertCooldown)
 	}
 }
 
 func TestLoadConfigMissingFile(t *testing.T) {
-	_, err := config.Load("/nonexistent/portwatch.json")
-	if err == nil {
-		t.Fatal("expected error for missing file")
+	cfg, err := Load("/nonexistent/portwatch.toml")
+	if err != nil {
+		t.Fatalf("expected no error for missing file, got %v", err)
+	}
+	if cfg.Interval != 30*time.Second {
+		t.Errorf("expected default interval, got %v", cfg.Interval)
 	}
 }
 
 func TestDurationRoundTrip(t *testing.T) {
-	cfg := config.Default()
-	cfg.Interval = config.Duration{Duration: 5 * time.Minute}
-	b, err := json.Marshal(cfg)
+	p := writeTempConfig(t, `interval = "1m30s"`)
+	cfg, err := Load(p)
 	if err != nil {
-		t.Fatalf("marshal: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
-	var out config.Config
-	if err := json.Unmarshal(b, &out); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if out.Interval.Duration != 5*time.Minute {
-		t.Errorf("round-trip mismatch: %v", out.Interval.Duration)
+	if cfg.Interval != 90*time.Second {
+		t.Errorf("got %v, want 90s", cfg.Interval)
 	}
 }

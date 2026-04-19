@@ -1,69 +1,51 @@
 package config
 
 import (
-	"encoding/json"
-	"errors"
-	"fmt"
 	"os"
 	"time"
+
+	"github.com/BurntSushi/toml"
 )
 
 // Config holds all portwatch runtime configuration.
 type Config struct {
-	PortRange  PortRange     `json:"port_range"`
-	Interval   Duration      `json:"interval"`
-	DataDir    string        `json:"data_dir"`
-	WebhookURL string        `json:"webhook_url,omitempty"`
-	WebhookTimeout Duration  `json:"webhook_timeout,omitempty"`
+	Interval      time.Duration `toml:"interval"`
+	PortRange     PortRange     `toml:"port_range"`
+	SnapshotPath  string        `toml:"snapshot_path"`
+	HistoryPath   string        `toml:"history_path"`
+	Notifiers     NotifiersCfg  `toml:"notifiers"`
+	AlertCooldown time.Duration `toml:"alert_cooldown"`
 }
 
+// PortRange defines the inclusive range of ports to scan.
 type PortRange struct {
-	From int `json:"from"`
-	To   int `json:"to"`
+	From int `toml:"from"`
+	To   int `toml:"to"`
 }
 
-// Duration wraps time.Duration for JSON marshalling as a string.
-type Duration struct{ time.Duration }
-
-func (d Duration) MarshalJSON() ([]byte, error) {
-	return json.Marshal(d.String())
-}
-
-func (d *Duration) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	parsed, err := time.ParseDuration(s)
-	if err != nil {
-		return err
-	}
-	d.Duration = parsed
-	return nil
-}
-
-// Default returns a Config with sensible defaults.
+// Default returns a Config populated with sensible defaults.
 func Default() Config {
 	return Config{
-		PortRange:      PortRange{From: 1, To: 65535},
-		Interval:       Duration{30 * time.Second},
-		DataDir:        "/var/lib/portwatch",
-		WebhookTimeout: Duration{5 * time.Second},
+		Interval:      30 * time.Second,
+		PortRange:     PortRange{From: 1, To: 65535},
+		SnapshotPath:  "/var/lib/portwatch/snapshot.json",
+		HistoryPath:   "/var/lib/portwatch/history.ndjson",
+		AlertCooldown: 5 * time.Minute,
 	}
 }
 
-// Load reads a JSON config file, falling back to defaults for missing fields.
+// Load reads a TOML config file, falling back to defaults for missing fields.
 func Load(path string) (Config, error) {
 	cfg := Default()
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return cfg, fmt.Errorf("config file not found: %s", path)
+		if os.IsNotExist(err) {
+			return cfg, nil
 		}
 		return cfg, err
 	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return cfg, fmt.Errorf("parse config: %w", err)
+	if _, err := toml.Decode(string(data), &cfg); err != nil {
+		return cfg, err
 	}
 	if err := validateRange(cfg.PortRange.From, cfg.PortRange.To); err != nil {
 		return cfg, err
