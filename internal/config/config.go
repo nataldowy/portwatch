@@ -2,23 +2,31 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"time"
 )
 
-// Config holds the portwatch daemon configuration.
+// Config holds all portwatch runtime configuration.
 type Config struct {
-	// PortRanges is a list of [start, end] port ranges to scan.
-	PortRanges [][2]int `json:"port_ranges"`
-	// Interval is the duration between scans.
-	Interval Duration `json:"interval"`
-	// LogFile is the path to the alert log file. Empty means stdout.
-	LogFile string `json:"log_file"`
+	PortRange  PortRange     `json:"port_range"`
+	Interval   Duration      `json:"interval"`
+	DataDir    string        `json:"data_dir"`
+	WebhookURL string        `json:"webhook_url,omitempty"`
+	WebhookTimeout Duration  `json:"webhook_timeout,omitempty"`
 }
 
-// Duration wraps time.Duration for JSON unmarshalling from a string.
-type Duration struct {
-	time.Duration
+type PortRange struct {
+	From int `json:"from"`
+	To   int `json:"to"`
+}
+
+// Duration wraps time.Duration for JSON marshalling as a string.
+type Duration struct{ time.Duration }
+
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.String())
 }
 
 func (d *Duration) UnmarshalJSON(b []byte) error {
@@ -34,30 +42,31 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (d Duration) MarshalJSON() ([]byte, error) {
-	return json.Marshal(d.Duration.String())
-}
-
 // Default returns a Config with sensible defaults.
-func Default() *Config {
-	return &Config{
-		PortRanges: [][2]int{{1, 1024}},
-		Interval:   Duration{30 * time.Second},
-		LogFile:    "",
+func Default() Config {
+	return Config{
+		PortRange:      PortRange{From: 1, To: 65535},
+		Interval:       Duration{30 * time.Second},
+		DataDir:        "/var/lib/portwatch",
+		WebhookTimeout: Duration{5 * time.Second},
 	}
 }
 
-// Load reads a JSON config file from the given path.
-func Load(path string) (*Config, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
+// Load reads a JSON config file, falling back to defaults for missing fields.
+func Load(path string) (Config, error) {
 	cfg := Default()
-	if err := json.NewDecoder(f).Decode(cfg); err != nil {
-		return nil, err
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return cfg, fmt.Errorf("config file not found: %s", path)
+		}
+		return cfg, err
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return cfg, fmt.Errorf("parse config: %w", err)
+	}
+	if err := validateRange(cfg.PortRange.From, cfg.PortRange.To); err != nil {
+		return cfg, err
 	}
 	return cfg, nil
 }
