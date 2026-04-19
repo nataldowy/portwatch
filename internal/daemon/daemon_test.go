@@ -19,13 +19,17 @@ func defaultCfg() *config.Config {
 	return cfg
 }
 
+// newTestDaemon creates a Daemon with a LogNotifier writing to buf for use in tests.
+func newTestDaemon(cfg *config.Config, buf *bytes.Buffer) *Daemon {
+	notifier := alert.NewLogNotifier(buf)
+	dispatcher := alert.NewDispatcher(notifier)
+	return New(cfg, dispatcher)
+}
+
 func TestDaemonRunCancels(t *testing.T) {
 	cfg := defaultCfg()
 	var buf bytes.Buffer
-	notifier := alert.NewLogNotifier(&buf)
-	dispatcher := alert.NewDispatcher(notifier)
-
-	d := New(cfg, dispatcher)
+	d := newTestDaemon(cfg, &buf)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Millisecond)
 	defer cancel()
@@ -41,10 +45,7 @@ func TestDaemonRunTicksAtLeastOnce(t *testing.T) {
 	cfg.Interval = 30 * time.Millisecond
 
 	var buf bytes.Buffer
-	notifier := alert.NewLogNotifier(&buf)
-	dispatcher := alert.NewDispatcher(notifier)
-
-	d := New(cfg, dispatcher)
+	d := newTestDaemon(cfg, &buf)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
