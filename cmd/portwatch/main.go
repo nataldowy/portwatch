@@ -52,13 +52,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		sig := <-sigs
-		fmt.Fprintf(os.Stderr, "\nreceived signal %s, shutting down...\n", sig)
-		cancel()
-	}()
+	waitForSignal(cancel)
 
 	fmt.Printf("portwatch %s starting (interval: %s, range: %d-%d)\n",
 		version, cfg.Interval, cfg.PortRange.From, cfg.PortRange.To)
@@ -67,4 +61,16 @@ func main() {
 		fmt.Fprintf(os.Stderr, "daemon error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// waitForSignal spawns a goroutine that listens for SIGINT or SIGTERM and
+// calls cancel to trigger a graceful shutdown when either signal is received.
+func waitForSignal(cancel context.CancelFunc) {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigs
+		fmt.Fprintf(os.Stderr, "\nreceived signal %s, shutting down...\n", sig)
+		cancel()
+	}()
 }
