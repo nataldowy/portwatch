@@ -79,3 +79,22 @@ func TestSchedulerStopsOnCancel(t *testing.T) {
 		t.Fatal("scheduler did not stop after context cancel")
 	}
 }
+
+func TestSchedulerLastRunTime(t *testing.T) {
+	before := time.Now()
+	s := NewScheduler(10*time.Millisecond, 0, func(ctx context.Context) error {
+		return nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Millisecond)
+	defer cancel()
+	s.Run(ctx)
+
+	lastRun, _, _ := s.Stats()
+	if lastRun.Before(before) {
+		t.Fatalf("expected lastRun to be after test start, got %v", lastRun)
+	}
+	if time.Since(lastRun) > 200*time.Millisecond {
+		t.Fatalf("lastRun timestamp is unexpectedly old: %v", lastRun)
+	}
+}
