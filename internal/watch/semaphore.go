@@ -27,6 +27,17 @@ func (s *Semaphore) Acquire(ctx context.Context) error {
 	}
 }
 
+// TryAcquire attempts to acquire a slot without blocking.
+// Returns true if a slot was acquired, false if all slots are in use.
+func (s *Semaphore) TryAcquire() bool {
+	select {
+	case s.slots <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
 // Release frees a previously acquired slot.
 // It panics if called more times than Acquire has succeeded.
 func (s *Semaphore) Release() {
