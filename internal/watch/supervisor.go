@@ -2,6 +2,7 @@ package watch
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 )
@@ -30,6 +31,11 @@ func NewSupervisor(cfg SupervisorConfig) *Supervisor {
 	}
 }
 
+// isContextError reports whether err is a context cancellation or deadline error.
+func isContextError(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
 // Run starts the task and supervises it, restarting on non-context errors.
 func (s *Supervisor) Run(ctx context.Context, task Task) error {
 	for {
@@ -37,7 +43,7 @@ func (s *Supervisor) Run(ctx context.Context, task Task) error {
 			return ctx.Err()
 		}
 		err := task(ctx)
-		if err == nil || err == context.Canceled || err == context.DeadlineExceeded {
+		if err == nil || isContextError(err) {
 			return err
 		}
 		if !s.retry.Allow(s.cfg.Name) {
