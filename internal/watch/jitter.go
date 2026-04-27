@@ -38,6 +38,16 @@ func (j *Jitter) Apply(base time.Duration) time.Duration {
 	return result
 }
 
+// ApplyMin behaves like Apply but ensures the result is never less than min.
+// This is useful when a minimum polling interval must be respected.
+func (j *Jitter) ApplyMin(base, min time.Duration) time.Duration {
+	result := j.Apply(base)
+	if result < min {
+		return min
+	}
+	return result
+}
+
 // Reset re-seeds the internal RNG.
 func (j *Jitter) Reset() {
 	j.mu.Lock()
