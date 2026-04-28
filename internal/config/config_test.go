@@ -73,3 +73,11 @@ func TestDurationRoundTrip(t *testing.T) {
 		t.Errorf("got %v, want 90s", cfg.Interval)
 	}
 }
+
+func TestLoadConfigInvalidTOML(t *testing.T) {
+	p := writeTempConfig(t, `interval = [not valid toml`)
+	_, err := Load(p)
+	if err == nil {
+		t.Fatal("expected error for invalid TOML, got nil")
+	}
+}
