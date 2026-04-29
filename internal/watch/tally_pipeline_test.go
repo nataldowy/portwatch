@@ -60,3 +60,24 @@ func TestTallyResetAfterPipelineResetAllowsRecount(t *testing.T) {
 		t.Fatalf("expected count 1 after reset, got %v", e)
 	}
 }
+
+// TestTallyMultiplePassesAccumulateCount verifies that recording the same key
+// multiple times (each time it passes the pipeline after a reset) increments
+// the tally count correctly across successive allowed events.
+func TestTallyMultiplePassesAccumulateCount(t *testing.T) {
+	tl := NewTally()
+	key := "8080"
+
+	const passes = 3
+	for i := 0; i < passes; i++ {
+		tl.Record(key)
+	}
+
+	e := tl.Get(key)
+	if e == nil {
+		t.Fatal("expected tally entry, got nil")
+	}
+	if e.Count != passes {
+		t.Fatalf("expected count %d, got %d", passes, e.Count)
+	}
+}
