@@ -78,3 +78,22 @@ func TestRelayNoSubscribersNoError(t *testing.T) {
 	// should not panic
 	r.Forward(makeRelayEvent("closed", "80"))
 }
+
+func TestRelayForwardPreservesEventFields(t *testing.T) {
+	r := NewRelay(nil)
+	var got scanner.DiffEvent
+	r.Subscribe(func(ev scanner.DiffEvent) { got = ev })
+
+	want := makeRelayEvent("closed", "3000")
+	r.Forward(want)
+
+	if got.Kind != want.Kind {
+		t.Errorf("expected kind %q, got %q", want.Kind, got.Kind)
+	}
+	if got.Port.Protocol != want.Port.Protocol {
+		t.Errorf("expected protocol %q, got %q", want.Port.Protocol, got.Port.Protocol)
+	}
+	if !got.At.Equal(want.At) {
+		t.Errorf("expected timestamp %v, got %v", want.At, got.At)
+	}
+}
