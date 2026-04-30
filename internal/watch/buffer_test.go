@@ -68,3 +68,19 @@ func TestBufferDefaultsInvalidMax(t *testing.T) {
 		t.Errorf("expected 1 distinct key, got %d", b.Len())
 	}
 }
+
+func TestBufferFlushReturnsCopy(t *testing.T) {
+	b := NewBuffer(10)
+	b.Add("8080")
+	entries := b.Flush()
+	if len(entries) == 0 {
+		t.Fatal("expected at least one entry")
+	}
+	// Mutating the returned slice should not affect subsequent flushes.
+	entries[0].Key = "mutated"
+	b.Add("8080")
+	next := b.Flush()
+	if len(next) != 1 || next[0].Key != "8080" {
+		t.Errorf("expected key '8080' after mutation of previous flush result, got %v", next)
+	}
+}
