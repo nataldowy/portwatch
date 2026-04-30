@@ -64,3 +64,10 @@ func TestBackoffIndependentKeys(t *testing.T) {
 		t.Fatalf("keys should be independent, got %v", d)
 	}
 }
+
+func TestBackoffFailuresUnknownKey(t *testing.T) {
+	b := NewBackoff(100*time.Millisecond, 5*time.Second)
+	if f := b.Failures("unknown"); f != 0 {
+		t.Fatalf("expected 0 failures for unknown key, got %d", f)
+	}
+}
